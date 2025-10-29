@@ -426,30 +426,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Firebase Setup Banner -->
-        <div class="setup-banner" id="setupBanner" style="display: none;">
-            <h3>⚙️ Firebase Setup Required</h3>
-            <p>To sync your library across devices, please configure Firebase:</p>
-            <p>1. Go to <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a></p>
-            <p>2. Create a new project (free)</p>
-            <p>3. Enable Firestore Database</p>
-            <p>4. Copy your config values below</p>
-        </div>
-
-        <!-- Firebase Config Section -->
-        <div class="config-section" id="configSection" style="display: none;">
-            <label class="config-label">API Key:</label>
-            <input type="text" class="config-input" id="apiKey" placeholder="AIzaSy...">
-            
-            <label class="config-label">Project ID:</label>
-            <input type="text" class="config-input" id="projectId" placeholder="your-project-id">
-            
-            <label class="config-label">App ID:</label>
-            <input type="text" class="config-input" id="appId" placeholder="1:123456789:web:abc...">
-            
-            <button class="save-config-btn" onclick="saveFirebaseConfig()">💾 Save & Connect</button>
-        </div>
-
         <div class="upload-section" id="uploadSection">
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📁</div>
@@ -504,27 +480,22 @@
         const saveToLibrary = document.getElementById('saveToLibrary');
         const clearBtn = document.getElementById('clearBtn');
         const syncStatus = document.getElementById('syncStatus');
-        const setupBanner = document.getElementById('setupBanner');
-        const configSection = document.getElementById('configSection');
 
         let db = null;
         let savedFiles = [];
         let isFirebaseConfigured = false;
 
         function initializeFirebase() {
-            const config = localStorage.getItem('firebaseConfig');
-            
-            if (!config) {
-                setupBanner.style.display = 'block';
-                configSection.style.display = 'block';
-                syncStatus.textContent = '⚠️ Setup required';
-                syncStatus.className = 'sync-status error';
-                loadLocalLibrary();
-                return;
-            }
-
             try {
-                const firebaseConfig = JSON.parse(config);
+                const firebaseConfig = {
+                    apiKey: "AIzaSyCJYaAiza4mONfM9uAzHcTd04-7LyAnGzA",
+                    authDomain: "reader-a3660.firebaseapp.com",
+                    projectId: "reader-a3660",
+                    storageBucket: "reader-a3660.firebasestorage.app",
+                    messagingSenderId: "667053794535",
+                    appId: "1:667053794535:web:159d02d05ca311d6d8ee42"
+                };
+
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
                 isFirebaseConfigured = true;
@@ -537,34 +508,8 @@
                 console.error('Firebase init error:', error);
                 syncStatus.textContent = '✗ Connection error';
                 syncStatus.className = 'sync-status error';
-                setupBanner.style.display = 'block';
-                configSection.style.display = 'block';
                 loadLocalLibrary();
             }
-        }
-
-        function saveFirebaseConfig() {
-            const apiKey = document.getElementById('apiKey').value.trim();
-            const projectId = document.getElementById('projectId').value.trim();
-            const appId = document.getElementById('appId').value.trim();
-
-            if (!apiKey || !projectId || !appId) {
-                alert('Please fill all fields');
-                return;
-            }
-
-            const firebaseConfig = {
-                apiKey: apiKey,
-                authDomain: `${projectId}.firebaseapp.com`,
-                projectId: projectId,
-                storageBucket: `${projectId}.appspot.com`,
-                messagingSenderId: appId.split(':')[1],
-                appId: appId
-            };
-
-            localStorage.setItem('firebaseConfig', JSON.stringify(firebaseConfig));
-            alert('Configuration saved! Reloading page...');
-            location.reload();
         }
 
         function loadLocalLibrary() {
