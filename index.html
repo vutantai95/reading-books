@@ -11,10 +11,6 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
     
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    
     <style>
         * {
             margin: 0;
@@ -386,21 +382,22 @@
         }
 
         .pdf-page {
-            margin-bottom: 20px;
+            margin-bottom: 30px;
             text-align: center;
         }
 
         .pdf-page canvas {
             max-width: 100%;
             height: auto;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
             border-radius: 8px;
+            background: white;
         }
 
         .page-number {
             color: #999;
             font-size: 0.9em;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             font-weight: 500;
         }
 
@@ -552,7 +549,7 @@
                 <div>
                     <div class="library-title">📚 My Library</div>
                     <div class="library-stats" id="libraryStats"></div>
-                    <div class="sync-status" id="syncStatus">Connecting...</div>
+                    <div class="sync-status" id="syncStatus">Local storage</div>
                 </div>
                 <button class="clear-btn" onclick="clearLibrary()" id="clearBtn" style="display: none;">🗑️ Clear all</button>
             </div>
@@ -577,7 +574,6 @@
             </div>
         </div>
 
-        <!-- Floating Navigation Buttons -->
         <button class="floating-btn floating-back-btn" id="floatingBackBtn" onclick="goBack()" title="Back to library">←</button>
         <button class="floating-btn floating-undo-btn" id="floatingUndoBtn" onclick="undoScroll()" title="Undo scroll">↶</button>
         <button class="floating-btn back-to-top" id="backToTop" onclick="scrollToTop()" title="Scroll to top">↑</button>
@@ -603,9 +599,10 @@
         const floatingUndoBtn = document.getElementById('floatingUndoBtn');
         const libraryStats = document.getElementById('libraryStats');
 
-        let db = null;
         let savedFiles = [];
         let currentFileIndex = null;
+        let currentPdfDoc = null;
+        let currentFileData = null;
         let scrollSaveTimeout = null;
         let scrollHistory = [];
 
@@ -613,7 +610,6 @@
             if (contentSection.classList.contains('show')) {
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
                 const scrollHeight = document.documentElement.scrollHeight;
-                const clientHeight = document.documentElement.clientHeight;
                 
                 floatingBackBtn.classList.add('show');
                 floatingUndoBtn.classList.add('show');
@@ -638,15 +634,9 @@
             const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
             if (currentScroll > 100) {
                 scrollHistory.push(currentScroll);
-                if (scrollHistory.length > 10) {
-                    scrollHistory.shift();
-                }
+                if (scrollHistory.length > 10) scrollHistory.shift();
             }
-
-            window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function scrollToBottom() {
@@ -655,29 +645,18 @@
             
             if (currentScroll < maxScroll - 100) {
                 scrollHistory.push(currentScroll);
-                if (scrollHistory.length > 10) {
-                    scrollHistory.shift();
-                }
+                if (scrollHistory.length > 10) scrollHistory.shift();
             }
-
-            window.scrollTo({
-                top: document.documentElement.scrollHeight,
-                behavior: 'smooth'
-            });
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
         }
 
         function undoScroll() {
             if (scrollHistory.length === 0) return;
-            
             const previousPosition = scrollHistory.pop();
-
-            window.scrollTo({
-                top: previousPosition,
-                behavior: 'smooth'
-            });
+            window.scrollTo({ top: previousPosition, behavior: 'smooth' });
         }
 
-        async function saveScrollPosition(scrollTop, scrollHeight) {
+        function saveScrollPosition(scrollTop, scrollHeight) {
             if (currentFileIndex === null) return;
 
             const progress = Math.round((scrollTop / scrollHeight) * 100);
@@ -688,21 +667,7 @@
             file.readingProgress = progress;
             file.lastRead = new Date().toISOString();
 
-            if (db && file.id) {
-                try {
-                    await db.collection('documents').doc(file.id).update({
-                        scrollPosition: scrollTop,
-                        scrollHeight: scrollHeight,
-                        readingProgress: progress,
-                        lastRead: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                } catch (error) {
-                    console.error('Save scroll error:', error);
-                    saveLocalLibrary();
-                }
-            } else {
-                saveLocalLibrary();
-            }
+            saveLocalLibrary();
         }
 
         function formatFileSize(bytes) {
@@ -731,62 +696,14 @@
             return date.toLocaleDateString();
         }
 
-        async function updateLastRead(index) {
-            const file = savedFiles[index];
-            file.lastRead = new Date().toISOString();
-
-            if (db && file.id) {
-                try {
-                    await db.collection('documents').doc(file.id).update({
-                        lastRead: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                } catch (error) {
-                    console.error('Update last read error:', error);
-                    saveLocalLibrary();
-                }
-            } else {
-                saveLocalLibrary();
-            }
-        }
-
-        function initializeFirebase() {
-            const allowedDomains = ['vutantai95.github.io', 'localhost', '127.0.0.1'];
-            const currentDomain = window.location.hostname;
-            
-            if (!allowedDomains.includes(currentDomain)) {
-                console.error('Unauthorized domain');
-                syncStatus.textContent = '✗ Unauthorized';
-                syncStatus.className = 'sync-status error';
-                loadLocalLibrary();
-                return;
-            }
-
-            try {
-                const firebaseConfig = {
-                    apiKey: "AIzaSyCJYaAiza4mONfM9uAzHcTd04-7LyAnGzA",
-                    authDomain: "reader-a3660.firebaseapp.com",
-                    projectId: "reader-a3660",
-                    storageBucket: "reader-a3660.firebasestorage.app",
-                    messagingSenderId: "667053794535",
-                    appId: "1:667053794535:web:159d02d05ca311d6d8ee42"
-                };
-
-                firebase.initializeApp(firebaseConfig);
-                db = firebase.firestore();
-                syncStatus.textContent = '✓ Cloud synced';
-                syncStatus.className = 'sync-status synced';
-                loadLibrary();
-            } catch (error) {
-                console.error('Firebase error:', error);
-                syncStatus.textContent = '✗ Offline mode';
-                syncStatus.className = 'sync-status error';
-                loadLocalLibrary();
-            }
+        function updateLastRead(index) {
+            savedFiles[index].lastRead = new Date().toISOString();
+            saveLocalLibrary();
         }
 
         function loadLocalLibrary() {
             try {
-                const saved = localStorage.getItem('word-library-local');
+                const saved = localStorage.getItem('reader-library');
                 if (saved) {
                     savedFiles = JSON.parse(saved);
                     savedFiles.sort((a, b) => {
@@ -802,108 +719,25 @@
         }
 
         function saveLocalLibrary() {
-            localStorage.setItem('word-library-local', JSON.stringify(savedFiles));
-        }
-
-        async function loadLibrary() {
-            if (!db) {
-                loadLocalLibrary();
-                return;
-            }
-
             try {
-                const snapshot = await db.collection('documents').orderBy('timestamp', 'desc').get();
-                savedFiles = [];
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    if (data.lastRead && data.lastRead.toDate) {
-                        data.lastRead = data.lastRead.toDate().toISOString();
-                    }
-                    savedFiles.push({ id: doc.id, ...data });
-                });
-                savedFiles.sort((a, b) => {
-                    const aLastRead = a.lastRead ? new Date(a.lastRead).getTime() : 0;
-                    const bLastRead = b.lastRead ? new Date(b.lastRead).getTime() : 0;
-                    return bLastRead - aLastRead;
-                });
-                renderLibrary();
+                localStorage.setItem('reader-library', JSON.stringify(savedFiles));
             } catch (error) {
-                console.error('Load error:', error);
-                syncStatus.textContent = '✗ Load failed';
-                syncStatus.className = 'sync-status error';
-                loadLocalLibrary();
+                console.error('Storage error:', error);
             }
         }
 
-        async function saveToFirebase(file) {
-            if (!db) {
-                savedFiles.unshift(file);
-                saveLocalLibrary();
-                renderLibrary();
-                return;
-            }
-
-            try {
-                await db.collection('documents').add({
-                    ...file,
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                syncStatus.textContent = '✓ Cloud synced';
-                syncStatus.className = 'sync-status synced';
-                await loadLibrary();
-            } catch (error) {
-                console.error('Save error:', error);
-                syncStatus.textContent = '✗ Save failed';
-                syncStatus.className = 'sync-status error';
-                savedFiles.unshift(file);
-                saveLocalLibrary();
-                renderLibrary();
-            }
-        }
-
-        async function deleteFile(index) {
+        function deleteFile(index) {
             if (!confirm('Delete this document?')) return;
-
-            const file = savedFiles[index];
-
-            if (db && file.id) {
-                try {
-                    await db.collection('documents').doc(file.id).delete();
-                    await loadLibrary();
-                } catch (error) {
-                    console.error('Delete error:', error);
-                    savedFiles.splice(index, 1);
-                    saveLocalLibrary();
-                    renderLibrary();
-                }
-            } else {
-                savedFiles.splice(index, 1);
-                saveLocalLibrary();
-                renderLibrary();
-            }
+            savedFiles.splice(index, 1);
+            saveLocalLibrary();
+            renderLibrary();
         }
 
-        async function clearLibrary() {
+        function clearLibrary() {
             if (!confirm('Clear all documents from library?')) return;
-
-            if (db) {
-                try {
-                    const snapshot = await db.collection('documents').get();
-                    const batch = db.batch();
-                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-                    await batch.commit();
-                    await loadLibrary();
-                } catch (error) {
-                    console.error('Clear error:', error);
-                    savedFiles = [];
-                    saveLocalLibrary();
-                    renderLibrary();
-                }
-            } else {
-                savedFiles = [];
-                saveLocalLibrary();
-                renderLibrary();
-            }
+            savedFiles = [];
+            saveLocalLibrary();
+            renderLibrary();
         }
 
         function renderLibrary() {
@@ -916,11 +750,7 @@
                 
                 let totalSize = 0;
                 savedFiles.forEach(file => {
-                    if (file.fileSize) {
-                        totalSize += file.fileSize;
-                    } else if (file.content) {
-                        totalSize += new Blob([file.content]).size;
-                    }
+                    if (file.fileSize) totalSize += file.fileSize;
                 });
                 
                 libraryStats.textContent = `${savedFiles.length} document${savedFiles.length > 1 ? 's' : ''} • Total: ${formatFileSize(totalSize)}`;
@@ -937,7 +767,7 @@
                         </div>
                     ` : '';
 
-                    const fileSize = file.fileSize ? formatFileSize(file.fileSize) : (file.content ? formatFileSize(new Blob([file.content]).size) : '0 KB');
+                    const fileSize = formatFileSize(file.fileSize);
                     const fileTypeIcon = file.fileType === '.pdf' ? '📄' : '📝';
 
                     fileItem.innerHTML = `
@@ -956,15 +786,28 @@
             }
         }
 
-        function loadSavedFile(index) {
+        async function loadSavedFile(index) {
             uploadSection.style.display = 'none';
             librarySection.style.display = 'none';
             loading.classList.add('show');
+            loadingText.textContent = 'Loading document...';
             currentFileIndex = index;
             scrollHistory = [];
 
-            setTimeout(() => {
-                documentContent.innerHTML = savedFiles[index].content;
+            try {
+                const file = savedFiles[index];
+                
+                if (file.fileType === '.pdf') {
+                    const binaryString = atob(file.fileData);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    await renderPDFFromData(bytes.buffer);
+                } else {
+                    documentContent.innerHTML = file.content;
+                }
+
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
                 
@@ -973,7 +816,6 @@
                 backToTop.classList.add('show');
                 goToBottom.classList.add('show');
                 
-                const file = savedFiles[index];
                 if (file.scrollPosition && file.scrollHeight) {
                     const currentScrollHeight = document.documentElement.scrollHeight;
                     const ratio = file.scrollPosition / file.scrollHeight;
@@ -987,18 +829,18 @@
                 }
 
                 updateLastRead(index);
-            }, 300);
+            } catch (error) {
+                console.error('Load error:', error);
+                alert('Error loading document');
+                goBack();
+            }
         }
 
-        uploadArea.addEventListener('click', () => {
-            fileInput.click();
-        });
+        uploadArea.addEventListener('click', () => fileInput.click());
 
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file) {
-                processFile(file);
-            }
+            if (file) processFile(file);
         });
 
         uploadArea.addEventListener('dragover', (e) => {
@@ -1021,16 +863,24 @@
             }
         });
 
-        async function processPDFAsCanvas(file) {
-            const arrayBuffer = await file.arrayBuffer();
+        async function renderPDFFromData(arrayBuffer) {
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            let htmlContent = '<div style="max-width: 100%;">';
-
+            currentPdfDoc = pdf;
+            
+            documentContent.innerHTML = '';
+            
             for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                loadingText.textContent = `Processing PDF page ${pageNum}/${pdf.numPages}...`;
+                loadingText.textContent = `Rendering page ${pageNum}/${pdf.numPages}...`;
                 
                 const page = await pdf.getPage(pageNum);
                 const viewport = page.getViewport({ scale: 1.5 });
+                
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'pdf-page';
+                
+                const pageNumDiv = document.createElement('div');
+                pageNumDiv.className = 'page-number';
+                pageNumDiv.textContent = `Page ${pageNum} of ${pdf.numPages}`;
                 
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
@@ -1042,37 +892,10 @@
                     viewport: viewport
                 }).promise;
 
-                const imageData = canvas.toDataURL('image/jpeg', 0.8);
-                
-                htmlContent += `
-                    <div class="pdf-page">
-                        <div class="page-number">Page ${pageNum} of ${pdf.numPages}</div>
-                        <img src="${imageData}" alt="Page ${pageNum}" style="max-width: 100%; height: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px;">
-                    </div>
-                `;
+                pageDiv.appendChild(pageNumDiv);
+                pageDiv.appendChild(canvas);
+                documentContent.appendChild(pageDiv);
             }
-
-            htmlContent += '</div>';
-            return htmlContent;
-        }
-
-        async function processWordWithImages(file) {
-            const arrayBuffer = await file.arrayBuffer();
-            
-            const result = await mammoth.convertToHtml(
-                { arrayBuffer: arrayBuffer },
-                {
-                    convertImage: mammoth.images.imgElement(function(image) {
-                        return image.read("base64").then(function(imageBuffer) {
-                            return {
-                                src: "data:" + image.contentType + ";base64," + imageBuffer
-                            };
-                        });
-                    })
-                }
-            );
-            
-            return result.value;
         }
 
         async function processFile(file) {
@@ -1083,23 +906,50 @@
                 loadingText.textContent = 'Processing file...';
 
                 let htmlContent = '';
+                let fileData = null;
                 
                 if (file.name.endsWith('.docx')) {
                     loadingText.textContent = 'Processing Word document...';
-                    htmlContent = await processWordWithImages(file);
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.convertToHtml(
+                        { arrayBuffer: arrayBuffer },
+                        {
+                            convertImage: mammoth.images.imgElement(function(image) {
+                                return image.read("base64").then(function(imageBuffer) {
+                                    return {
+                                        src: "data:" + image.contentType + ";base64," + imageBuffer
+                                    };
+                                });
+                            })
+                        }
+                    );
+                    htmlContent = result.value;
+                    documentContent.innerHTML = htmlContent;
                 } else if (file.name.endsWith('.pdf')) {
                     loadingText.textContent = 'Processing PDF...';
-                    htmlContent = await processPDFAsCanvas(file);
+                    const arrayBuffer = await file.arrayBuffer();
+                    fileData = arrayBuffer;
+                    await renderPDFFromData(arrayBuffer);
                 }
-                
-                documentContent.innerHTML = htmlContent;
 
                 if (saveToLibrary.checked) {
                     loadingText.textContent = 'Saving to library...';
                     const fileExtension = file.name.endsWith('.pdf') ? '.pdf' : '.docx';
+                    
+                    let dataToSave = htmlContent;
+                    if (file.name.endsWith('.pdf')) {
+                        const bytes = new Uint8Array(fileData);
+                        let binary = '';
+                        for (let i = 0; i < bytes.byteLength; i++) {
+                            binary += String.fromCharCode(bytes[i]);
+                        }
+                        dataToSave = btoa(binary);
+                    }
+                    
                     const newFile = {
                         name: file.name.replace(fileExtension, ''),
-                        content: htmlContent,
+                        content: file.name.endsWith('.docx') ? htmlContent : null,
+                        fileData: file.name.endsWith('.pdf') ? dataToSave : null,
                         date: new Date().toLocaleDateString(),
                         fileSize: file.size,
                         fileType: fileExtension,
@@ -1108,7 +958,9 @@
                         scrollHeight: 0,
                         readingProgress: 0
                     };
-                    await saveToFirebase(newFile);
+                    
+                    savedFiles.unshift(newFile);
+                    saveLocalLibrary();
                     currentFileIndex = 0;
                 } else {
                     currentFileIndex = null;
@@ -1140,6 +992,7 @@
             documentContent.innerHTML = '';
             fileInput.value = '';
             currentFileIndex = null;
+            currentPdfDoc = null;
             scrollHistory = [];
             
             savedFiles.sort((a, b) => {
@@ -1169,6 +1022,7 @@
                         ul, ol { margin-left: 2em; margin-bottom: 1em; }
                         img { max-width: 100%; height: auto; margin: 1em 0; }
                         .page-number { color: #999; font-size: 0.9em; margin: 1em 0; }
+                        canvas { max-width: 100%; height: auto; page-break-inside: avoid; }
                     </style>
                 </head>
                 <body>
@@ -1180,7 +1034,7 @@
             printWindow.print();
         }
 
-        initializeFirebase();
+        loadLocalLibrary();
     </script>
 </body>
 </html>
