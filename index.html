@@ -734,6 +734,12 @@
                 const saved = localStorage.getItem('word-library-local');
                 if (saved) {
                     savedFiles = JSON.parse(saved);
+                    // Sort by lastRead (most recent first)
+                    savedFiles.sort((a, b) => {
+                        const aLastRead = a.lastRead ? new Date(a.lastRead).getTime() : 0;
+                        const bLastRead = b.lastRead ? new Date(b.lastRead).getTime() : 0;
+                        return bLastRead - aLastRead;
+                    });
                 }
             } catch (error) {
                 savedFiles = [];
@@ -761,6 +767,12 @@
                         data.lastRead = data.lastRead.toDate().toISOString();
                     }
                     savedFiles.push({ id: doc.id, ...data });
+                });
+                // Sort by lastRead (most recent first), then by timestamp
+                savedFiles.sort((a, b) => {
+                    const aLastRead = a.lastRead ? new Date(a.lastRead).getTime() : 0;
+                    const bLastRead = b.lastRead ? new Date(b.lastRead).getTime() : 0;
+                    return bLastRead - aLastRead;
                 });
                 renderLibrary();
             } catch (error) {
@@ -1013,7 +1025,14 @@
             documentContent.innerHTML = '';
             fileInput.value = '';
             currentFileIndex = null;
-            renderLibrary(); // Refresh to show updated last read times
+            
+            // Re-sort and refresh library to show updated last read times
+            savedFiles.sort((a, b) => {
+                const aLastRead = a.lastRead ? new Date(a.lastRead).getTime() : 0;
+                const bLastRead = b.lastRead ? new Date(b.lastRead).getTime() : 0;
+                return bLastRead - aLastRead;
+            });
+            renderLibrary();
         }
 
         function printContent() {
