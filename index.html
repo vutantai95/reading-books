@@ -554,6 +554,18 @@
         }
 
         function initializeFirebase() {
+            // Security check: only allow on authorized domain
+            const allowedDomains = ['vutantai95.github.io', 'localhost', '127.0.0.1'];
+            const currentDomain = window.location.hostname;
+            
+            if (!allowedDomains.includes(currentDomain)) {
+                console.error('Unauthorized domain');
+                syncStatus.textContent = '✗ Unauthorized';
+                syncStatus.className = 'sync-status error';
+                loadLocalLibrary();
+                return;
+            }
+
             try {
                 const firebaseConfig = {
                     apiKey: "AIzaSyCJYaAiza4mONfM9uAzHcTd04-7LyAnGzA",
