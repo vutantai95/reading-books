@@ -6,6 +6,10 @@
     <title>Easy Reader</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📖</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -499,9 +503,9 @@
         <div class="upload-section" id="uploadSection">
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">📁</div>
-                <div class="upload-text">Drag and drop Word file here</div>
-                <div class="upload-subtext">or click to select file (.docx)</div>
-                <input type="file" id="fileInput" accept=".docx">
+                <div class="upload-text">Drag and drop document here</div>
+                <div class="upload-subtext">or click to select file (.docx, .pdf)</div>
+                <input type="file" id="fileInput" accept=".docx,.pdf">
             </div>
             <div class="upload-options">
                 <label class="checkbox-label">
@@ -901,10 +905,11 @@
                     ` : '';
 
                     const fileSize = file.fileSize ? formatFileSize(file.fileSize) : (file.content ? formatFileSize(new Blob([file.content]).size) : '0 KB');
+                    const fileTypeIcon = file.fileType === '.pdf' ? '📄' : '📝';
 
                     fileItem.innerHTML = `
                         <button class="delete-btn" onclick="deleteFile(${index}); event.stopPropagation();">×</button>
-                        <div class="file-name">${file.name}</div>
+                        <div class="file-name">${fileTypeIcon} ${file.name}</div>
                         <div class="file-meta">
                             <div class="file-meta-item">📅 ${file.date}</div>
                             ${file.lastRead ? `<div class="file-meta-item last-read">👁️ ${formatLastRead(file.lastRead)}</div>` : ''}
@@ -976,12 +981,52 @@
             e.preventDefault();
             uploadArea.classList.remove('dragover');
             const file = e.dataTransfer.files[0];
-            if (file && file.name.endsWith('.docx')) {
+            if (file && (file.name.endsWith('.docx') || file.name.endsWith('.pdf'))) {
                 processFile(file);
             } else {
-                alert('Please select a .docx file');
+                alert('Please select a .docx or .pdf file');
             }
         });
+
+        async function processPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let htmlContent = '<div style="max-width: 100%;">';
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                
+                htmlContent += `<div style="margin-bottom: 2em; padding-bottom: 2em; border-bottom: 1px solid #e0e7ff;">`;
+                htmlContent += `<p style="color: #999; font-size: 0.9em; margin-bottom: 1em;">Page ${pageNum}</p>`;
+                
+                let lastY = null;
+                let paragraph = '';
+                
+                textContent.items.forEach((item, index) => {
+                    const currentY = item.transform[5];
+                    
+                    if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+                        if (paragraph.trim()) {
+                            htmlContent += `<p>${paragraph.trim()}</p>`;
+                        }
+                        paragraph = '';
+                    }
+                    
+                    paragraph += item.str + ' ';
+                    lastY = currentY;
+                });
+                
+                if (paragraph.trim()) {
+                    htmlContent += `<p>${paragraph.trim()}</p>`;
+                }
+                
+                htmlContent += '</div>';
+            }
+
+            htmlContent += '</div>';
+            return htmlContent;
+        }
 
         async function processFile(file) {
             try {
@@ -989,17 +1034,26 @@
                 librarySection.style.display = 'none';
                 loading.classList.add('show');
 
-                const arrayBuffer = await file.arrayBuffer();
-                const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+                let htmlContent = '';
                 
-                documentContent.innerHTML = result.value;
+                if (file.name.endsWith('.docx')) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+                    htmlContent = result.value;
+                } else if (file.name.endsWith('.pdf')) {
+                    htmlContent = await processPDF(file);
+                }
+                
+                documentContent.innerHTML = htmlContent;
 
                 if (saveToLibrary.checked) {
+                    const fileExtension = file.name.endsWith('.pdf') ? '.pdf' : '.docx';
                     const newFile = {
-                        name: file.name.replace('.docx', ''),
-                        content: result.value,
+                        name: file.name.replace(fileExtension, ''),
+                        content: htmlContent,
                         date: new Date().toLocaleDateString(),
                         fileSize: file.size,
+                        fileType: fileExtension,
                         lastRead: new Date().toISOString(),
                         scrollPosition: 0,
                         scrollHeight: 0,
