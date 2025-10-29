@@ -122,6 +122,12 @@
             color: #667eea;
         }
 
+        .library-stats {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 5px;
+        }
+
         .sync-status {
             font-size: 0.85rem;
             color: #666;
@@ -189,9 +195,38 @@
             margin-bottom: 5px;
         }
 
-        .file-date {
-            font-size: 0.75rem;
+        .file-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-top: 8px;
+        }
+
+        .file-meta-item {
+            font-size: 0.7rem;
             color: #999;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .file-meta-item.last-read {
+            color: #667eea;
+        }
+
+        .reading-progress {
+            margin-top: 8px;
+            height: 4px;
+            background: #e0e7ff;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .reading-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+            transition: width 0.3s ease;
         }
 
         .delete-btn {
@@ -241,19 +276,18 @@
         .back-to-top {
             position: fixed;
             bottom: 30px;
-            right: 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            width: 50px;
-            height: 50px;
+            right: 70px;
+            background: #f0f2ff;
+            color: #667eea;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            border: none;
+            border: 2px solid #667eea;
             cursor: pointer;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             display: none;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
             transition: all 0.3s ease;
             z-index: 1000;
         }
@@ -263,22 +297,22 @@
         }
 
         .back-to-top:hover {
+            background: #e8ebff;
             transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
         }
 
         .go-to-bottom {
             position: fixed;
-            bottom: 90px;
-            right: 30px;
+            bottom: 30px;
+            right: 20px;
             background: #f0f2ff;
             color: #667eea;
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             border: 2px solid #667eea;
             cursor: pointer;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             display: none;
             align-items: center;
             justify-content: center;
@@ -293,6 +327,34 @@
         .go-to-bottom:hover {
             background: #e8ebff;
             transform: translateY(-3px);
+        }
+
+        .floating-back-btn {
+            position: fixed;
+            bottom: 30px;
+            left: 20px;
+            background: #f0f2ff;
+            color: #667eea;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .floating-back-btn.show {
+            display: flex;
+        }
+
+        .floating-back-btn:hover {
+            background: #e8ebff;
+            transform: translateX(-3px) scale(1.05);
         }
 
         .content-header {
@@ -465,6 +527,7 @@
             <div class="library-header">
                 <div>
                     <div class="library-title">📚 My Library</div>
+                    <div class="library-stats" id="libraryStats"></div>
                     <div class="sync-status" id="syncStatus">Connecting...</div>
                 </div>
                 <button class="clear-btn" onclick="clearLibrary()" id="clearBtn" style="display: none;">🗑️ Clear all</button>
@@ -491,6 +554,7 @@
         </div>
 
         <!-- Floating Navigation Buttons -->
+        <button class="floating-back-btn" id="floatingBackBtn" onclick="goBack()">←</button>
         <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
         <button class="go-to-bottom" id="goToBottom" onclick="scrollToBottom()">↓</button>
     </div>
@@ -509,31 +573,35 @@
         const syncStatus = document.getElementById('syncStatus');
         const backToTop = document.getElementById('backToTop');
         const goToBottom = document.getElementById('goToBottom');
+        const floatingBackBtn = document.getElementById('floatingBackBtn');
+        const libraryStats = document.getElementById('libraryStats');
 
         let db = null;
         let savedFiles = [];
+        let currentFileIndex = null;
+        let scrollSaveTimeout = null;
 
-        // Scroll tracking for floating buttons
+        // Scroll tracking for floating buttons and save position
         window.addEventListener('scroll', () => {
             if (contentSection.classList.contains('show')) {
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
                 const scrollHeight = document.documentElement.scrollHeight;
                 const clientHeight = document.documentElement.clientHeight;
                 
-                // Show back to top button when scrolled down 300px
-                if (scrollTop > 300) {
-                    backToTop.classList.add('show');
-                } else {
-                    backToTop.classList.remove('show');
-                }
-                
-                // Show go to bottom button when not at bottom
-                if (scrollTop + clientHeight < scrollHeight - 100) {
-                    goToBottom.classList.add('show');
-                } else {
-                    goToBottom.classList.remove('show');
+                // Always show all buttons when reading
+                floatingBackBtn.classList.add('show');
+                backToTop.classList.add('show');
+                goToBottom.classList.add('show');
+
+                // Save scroll position with debounce
+                if (currentFileIndex !== null) {
+                    clearTimeout(scrollSaveTimeout);
+                    scrollSaveTimeout = setTimeout(() => {
+                        saveScrollPosition(scrollTop, scrollHeight);
+                    }, 1000);
                 }
             } else {
+                floatingBackBtn.classList.remove('show');
                 backToTop.classList.remove('show');
                 goToBottom.classList.remove('show');
             }
@@ -551,6 +619,78 @@
                 top: document.documentElement.scrollHeight,
                 behavior: 'smooth'
             });
+        }
+
+        async function saveScrollPosition(scrollTop, scrollHeight) {
+            if (currentFileIndex === null) return;
+
+            const progress = Math.round((scrollTop / scrollHeight) * 100);
+            const file = savedFiles[currentFileIndex];
+            
+            file.scrollPosition = scrollTop;
+            file.scrollHeight = scrollHeight;
+            file.readingProgress = progress;
+            file.lastRead = new Date().toISOString();
+
+            if (db && file.id) {
+                try {
+                    await db.collection('documents').doc(file.id).update({
+                        scrollPosition: scrollTop,
+                        scrollHeight: scrollHeight,
+                        readingProgress: progress,
+                        lastRead: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (error) {
+                    console.error('Save scroll error:', error);
+                    saveLocalLibrary();
+                }
+            } else {
+                saveLocalLibrary();
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0) return '0 KB';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function formatLastRead(dateStr) {
+            if (!dateStr) return 'Never';
+            
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            
+            return date.toLocaleDateString();
+        }
+
+        async function updateLastRead(index) {
+            const file = savedFiles[index];
+            file.lastRead = new Date().toISOString();
+
+            if (db && file.id) {
+                try {
+                    await db.collection('documents').doc(file.id).update({
+                        lastRead: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (error) {
+                    console.error('Update last read error:', error);
+                    saveLocalLibrary();
+                }
+            } else {
+                saveLocalLibrary();
+            }
         }
 
         function initializeFirebase() {
@@ -615,7 +755,12 @@
                 const snapshot = await db.collection('documents').orderBy('timestamp', 'desc').get();
                 savedFiles = [];
                 snapshot.forEach(doc => {
-                    savedFiles.push({ id: doc.id, ...doc.data() });
+                    const data = doc.data();
+                    // Convert Firestore Timestamp to ISO string for lastRead
+                    if (data.lastRead && data.lastRead.toDate) {
+                        data.lastRead = data.lastRead.toDate().toISOString();
+                    }
+                    savedFiles.push({ id: doc.id, ...data });
                 });
                 renderLibrary();
             } catch (error) {
@@ -701,17 +846,46 @@
             if (savedFiles.length === 0) {
                 fileList.innerHTML = '<div class="empty-library">No documents saved yet. Upload a file and check "Save to library"</div>';
                 clearBtn.style.display = 'none';
+                libraryStats.textContent = '';
             } else {
                 clearBtn.style.display = 'block';
+                
+                // Calculate total size
+                let totalSize = 0;
+                savedFiles.forEach(file => {
+                    if (file.fileSize) {
+                        totalSize += file.fileSize;
+                    } else if (file.content) {
+                        totalSize += new Blob([file.content]).size;
+                    }
+                });
+                
+                libraryStats.textContent = `${savedFiles.length} document${savedFiles.length > 1 ? 's' : ''} • Total: ${formatFileSize(totalSize)}`;
+                
                 fileList.innerHTML = '';
                 savedFiles.forEach((file, index) => {
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
+                    
+                    const progress = file.readingProgress || 0;
+                    const progressBar = progress > 0 ? `
+                        <div class="reading-progress">
+                            <div class="reading-progress-bar" style="width: ${progress}%"></div>
+                        </div>
+                    ` : '';
+
+                    const fileSize = file.fileSize ? formatFileSize(file.fileSize) : (file.content ? formatFileSize(new Blob([file.content]).size) : '0 KB');
+
                     fileItem.innerHTML = `
                         <button class="delete-btn" onclick="deleteFile(${index}); event.stopPropagation();">×</button>
                         <div class="file-icon">📄</div>
                         <div class="file-name">${file.name}</div>
-                        <div class="file-date">${file.date}</div>
+                        <div class="file-meta">
+                            <div class="file-meta-item">📅 ${file.date}</div>
+                            ${file.lastRead ? `<div class="file-meta-item last-read">👁️ ${formatLastRead(file.lastRead)}</div>` : ''}
+                            <div class="file-meta-item">💾 ${fileSize}</div>
+                        </div>
+                        ${progressBar}
                     `;
                     fileItem.onclick = () => loadSavedFile(index);
                     fileList.appendChild(fileItem);
@@ -723,12 +897,34 @@
             uploadSection.style.display = 'none';
             librarySection.style.display = 'none';
             loading.classList.add('show');
+            currentFileIndex = index;
 
             setTimeout(() => {
                 documentContent.innerHTML = savedFiles[index].content;
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
-                window.scrollTo(0, 0);
+                
+                // Show floating back button immediately
+                floatingBackBtn.classList.add('show');
+                backToTop.classList.add('show');
+                goToBottom.classList.add('show');
+                
+                // Restore scroll position
+                const file = savedFiles[index];
+                if (file.scrollPosition && file.scrollHeight) {
+                    const currentScrollHeight = document.documentElement.scrollHeight;
+                    const ratio = file.scrollPosition / file.scrollHeight;
+                    const newScrollPosition = ratio * currentScrollHeight;
+                    
+                    setTimeout(() => {
+                        window.scrollTo(0, newScrollPosition);
+                    }, 100);
+                } else {
+                    window.scrollTo(0, 0);
+                }
+
+                // Update last read
+                updateLastRead(index);
             }, 300);
         }
 
@@ -778,15 +974,29 @@
                     const newFile = {
                         name: file.name.replace('.docx', ''),
                         content: result.value,
-                        date: new Date().toLocaleDateString()
+                        date: new Date().toLocaleDateString(),
+                        fileSize: file.size,
+                        lastRead: new Date().toISOString(),
+                        scrollPosition: 0,
+                        scrollHeight: 0,
+                        readingProgress: 0
                     };
                     await saveToFirebase(newFile);
+                    // Set current index to the newly added file (which will be at index 0)
+                    currentFileIndex = 0;
+                } else {
+                    currentFileIndex = null;
                 }
                 
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
                 saveToLibrary.checked = true;
                 window.scrollTo(0, 0);
+                
+                // Show floating back button immediately
+                floatingBackBtn.classList.add('show');
+                backToTop.classList.add('show');
+                goToBottom.classList.add('show');
             } catch (error) {
                 console.error('Error:', error);
                 alert('An error occurred while reading the file. Please try again.');
@@ -802,6 +1012,8 @@
             librarySection.style.display = 'block';
             documentContent.innerHTML = '';
             fileInput.value = '';
+            currentFileIndex = null;
+            renderLibrary(); // Refresh to show updated last read times
         }
 
         function printContent() {
