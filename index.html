@@ -268,10 +268,8 @@
             display: block;
         }
 
-        .back-to-top {
+        .floating-btn {
             position: fixed;
-            bottom: 30px;
-            right: 70px;
             background: #f0f2ff;
             color: #667eea;
             width: 40px;
@@ -287,69 +285,37 @@
             z-index: 1000;
         }
 
-        .back-to-top.show {
+        .floating-btn.show {
             display: flex;
         }
 
-        .back-to-top:hover {
+        .floating-btn:hover {
             background: #e8ebff;
-            transform: translateY(-3px);
-        }
-
-        .go-to-bottom {
-            position: fixed;
-            bottom: 30px;
-            right: 20px;
-            background: #f0f2ff;
-            color: #667eea;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: 2px solid #667eea;
-            cursor: pointer;
-            font-size: 1.2rem;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .go-to-bottom.show {
-            display: flex;
-        }
-
-        .go-to-bottom:hover {
-            background: #e8ebff;
-            transform: translateY(-3px);
+            transform: scale(1.1);
         }
 
         .floating-back-btn {
-            position: fixed;
             bottom: 30px;
             left: 20px;
-            background: #f0f2ff;
-            color: #667eea;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: 2px solid #667eea;
-            cursor: pointer;
-            font-size: 1.2rem;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .floating-back-btn.show {
-            display: flex;
         }
 
         .floating-back-btn:hover {
-            background: #e8ebff;
             transform: translateX(-3px) scale(1.05);
+        }
+
+        .floating-undo-btn {
+            bottom: 30px;
+            left: 70px;
+        }
+
+        .back-to-top {
+            bottom: 30px;
+            right: 70px;
+        }
+
+        .go-to-bottom {
+            bottom: 30px;
+            right: 20px;
         }
 
         .content-header {
@@ -498,6 +464,32 @@
                 padding: 10px 20px;
                 font-size: 0.9rem;
             }
+
+            .floating-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 1rem;
+            }
+
+            .floating-back-btn {
+                left: 10px;
+                bottom: 20px;
+            }
+
+            .floating-undo-btn {
+                left: 55px;
+                bottom: 20px;
+            }
+
+            .back-to-top {
+                right: 55px;
+                bottom: 20px;
+            }
+
+            .go-to-bottom {
+                right: 10px;
+                bottom: 20px;
+            }
         }
     </style>
 </head>
@@ -549,9 +541,10 @@
         </div>
 
         <!-- Floating Navigation Buttons -->
-        <button class="floating-back-btn" id="floatingBackBtn" onclick="goBack()">←</button>
-        <button class="back-to-top" id="backToTop" onclick="scrollToTop()">↑</button>
-        <button class="go-to-bottom" id="goToBottom" onclick="scrollToBottom()">↓</button>
+        <button class="floating-btn floating-back-btn" id="floatingBackBtn" onclick="goBack()" title="Back to library">←</button>
+        <button class="floating-btn floating-undo-btn" id="floatingUndoBtn" onclick="undoScroll()" title="Undo scroll">↶</button>
+        <button class="floating-btn back-to-top" id="backToTop" onclick="scrollToTop()" title="Scroll to top">↑</button>
+        <button class="floating-btn go-to-bottom" id="goToBottom" onclick="scrollToBottom()" title="Scroll to bottom">↓</button>
     </div>
 
     <script>
@@ -569,12 +562,14 @@
         const backToTop = document.getElementById('backToTop');
         const goToBottom = document.getElementById('goToBottom');
         const floatingBackBtn = document.getElementById('floatingBackBtn');
+        const floatingUndoBtn = document.getElementById('floatingUndoBtn');
         const libraryStats = document.getElementById('libraryStats');
 
         let db = null;
         let savedFiles = [];
         let currentFileIndex = null;
         let scrollSaveTimeout = null;
+        let scrollHistory = []; // Stack to store previous scroll positions
 
         // Scroll tracking for floating buttons and save position
         window.addEventListener('scroll', () => {
@@ -585,6 +580,7 @@
                 
                 // Always show all buttons when reading
                 floatingBackBtn.classList.add('show');
+                floatingUndoBtn.classList.add('show');
                 backToTop.classList.add('show');
                 goToBottom.classList.add('show');
 
@@ -597,12 +593,22 @@
                 }
             } else {
                 floatingBackBtn.classList.remove('show');
+                floatingUndoBtn.classList.remove('show');
                 backToTop.classList.remove('show');
                 goToBottom.classList.remove('show');
             }
         });
 
         function scrollToTop() {
+            // Save current position before scrolling
+            const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+            if (currentScroll > 100) { // Only save if meaningful scroll
+                scrollHistory.push(currentScroll);
+                if (scrollHistory.length > 10) { // Keep max 10 positions
+                    scrollHistory.shift();
+                }
+            }
+
             window.scrollTo({
                 top: 0,
                 behavior: 'smooth'
@@ -610,8 +616,30 @@
         }
 
         function scrollToBottom() {
+            // Save current position before scrolling
+            const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+            const maxScroll = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            
+            if (currentScroll < maxScroll - 100) { // Only save if meaningful scroll
+                scrollHistory.push(currentScroll);
+                if (scrollHistory.length > 10) { // Keep max 10 positions
+                    scrollHistory.shift();
+                }
+            }
+
             window.scrollTo({
                 top: document.documentElement.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        function undoScroll() {
+            if (scrollHistory.length === 0) return;
+            
+            const previousPosition = scrollHistory.pop();
+
+            window.scrollTo({
+                top: previousPosition,
                 behavior: 'smooth'
             });
         }
@@ -904,14 +932,16 @@
             librarySection.style.display = 'none';
             loading.classList.add('show');
             currentFileIndex = index;
+            scrollHistory = []; // Reset scroll history
 
             setTimeout(() => {
                 documentContent.innerHTML = savedFiles[index].content;
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
                 
-                // Show floating back button immediately
+                // Show floating buttons immediately
                 floatingBackBtn.classList.add('show');
+                floatingUndoBtn.classList.add('show');
                 backToTop.classList.add('show');
                 goToBottom.classList.add('show');
                 
@@ -998,9 +1028,11 @@
                 contentSection.classList.add('show');
                 saveToLibrary.checked = true;
                 window.scrollTo(0, 0);
+                scrollHistory = []; // Reset scroll history
                 
-                // Show floating back button immediately
+                // Show floating buttons immediately
                 floatingBackBtn.classList.add('show');
+                floatingUndoBtn.classList.add('show');
                 backToTop.classList.add('show');
                 goToBottom.classList.add('show');
             } catch (error) {
@@ -1019,6 +1051,7 @@
             documentContent.innerHTML = '';
             fileInput.value = '';
             currentFileIndex = null;
+            scrollHistory = []; // Reset scroll history
             
             // Re-sort and refresh library to show updated last read times
             savedFiles.sort((a, b) => {
