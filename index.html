@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📚 Easy Reader</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📚</text></svg>">
+    <title>Easy Reader</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📖</text></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     
     <!-- Firebase SDK -->
@@ -570,22 +570,19 @@
         let savedFiles = [];
         let currentFileIndex = null;
         let scrollSaveTimeout = null;
-        let scrollHistory = []; // Stack to store previous scroll positions
+        let scrollHistory = [];
 
-        // Scroll tracking for floating buttons and save position
         window.addEventListener('scroll', () => {
             if (contentSection.classList.contains('show')) {
                 const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
                 const scrollHeight = document.documentElement.scrollHeight;
                 const clientHeight = document.documentElement.clientHeight;
                 
-                // Always show all buttons when reading
                 floatingBackBtn.classList.add('show');
                 floatingUndoBtn.classList.add('show');
                 backToTop.classList.add('show');
                 goToBottom.classList.add('show');
 
-                // Save scroll position with debounce
                 if (currentFileIndex !== null) {
                     clearTimeout(scrollSaveTimeout);
                     scrollSaveTimeout = setTimeout(() => {
@@ -601,11 +598,10 @@
         });
 
         function scrollToTop() {
-            // Save current position before scrolling
             const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-            if (currentScroll > 100) { // Only save if meaningful scroll
+            if (currentScroll > 100) {
                 scrollHistory.push(currentScroll);
-                if (scrollHistory.length > 10) { // Keep max 10 positions
+                if (scrollHistory.length > 10) {
                     scrollHistory.shift();
                 }
             }
@@ -617,13 +613,12 @@
         }
 
         function scrollToBottom() {
-            // Save current position before scrolling
             const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
             const maxScroll = document.documentElement.scrollHeight - document.documentElement.clientHeight;
             
-            if (currentScroll < maxScroll - 100) { // Only save if meaningful scroll
+            if (currentScroll < maxScroll - 100) {
                 scrollHistory.push(currentScroll);
-                if (scrollHistory.length > 10) { // Keep max 10 positions
+                if (scrollHistory.length > 10) {
                     scrollHistory.shift();
                 }
             }
@@ -718,7 +713,6 @@
         }
 
         function initializeFirebase() {
-            // Security check: only allow on authorized domain
             const allowedDomains = ['vutantai95.github.io', 'localhost', '127.0.0.1'];
             const currentDomain = window.location.hostname;
             
@@ -758,7 +752,6 @@
                 const saved = localStorage.getItem('word-library-local');
                 if (saved) {
                     savedFiles = JSON.parse(saved);
-                    // Sort by lastRead (most recent first)
                     savedFiles.sort((a, b) => {
                         const aLastRead = a.lastRead ? new Date(a.lastRead).getTime() : 0;
                         const bLastRead = b.lastRead ? new Date(b.lastRead).getTime() : 0;
@@ -786,13 +779,11 @@
                 savedFiles = [];
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    // Convert Firestore Timestamp to ISO string for lastRead
                     if (data.lastRead && data.lastRead.toDate) {
                         data.lastRead = data.lastRead.toDate().toISOString();
                     }
                     savedFiles.push({ id: doc.id, ...data });
                 });
-                // Sort by lastRead (most recent first), then by timestamp
                 savedFiles.sort((a, b) => {
                     const aLastRead = a.lastRead ? new Date(a.lastRead).getTime() : 0;
                     const bLastRead = b.lastRead ? new Date(b.lastRead).getTime() : 0;
@@ -886,7 +877,6 @@
             } else {
                 clearBtn.style.display = 'block';
                 
-                // Calculate total size
                 let totalSize = 0;
                 savedFiles.forEach(file => {
                     if (file.fileSize) {
@@ -933,20 +923,18 @@
             librarySection.style.display = 'none';
             loading.classList.add('show');
             currentFileIndex = index;
-            scrollHistory = []; // Reset scroll history
+            scrollHistory = [];
 
             setTimeout(() => {
                 documentContent.innerHTML = savedFiles[index].content;
                 loading.classList.remove('show');
                 contentSection.classList.add('show');
                 
-                // Show floating buttons immediately
                 floatingBackBtn.classList.add('show');
                 floatingUndoBtn.classList.add('show');
                 backToTop.classList.add('show');
                 goToBottom.classList.add('show');
                 
-                // Restore scroll position
                 const file = savedFiles[index];
                 if (file.scrollPosition && file.scrollHeight) {
                     const currentScrollHeight = document.documentElement.scrollHeight;
@@ -960,7 +948,6 @@
                     window.scrollTo(0, 0);
                 }
 
-                // Update last read
                 updateLastRead(index);
             }, 300);
         }
@@ -1019,7 +1006,6 @@
                         readingProgress: 0
                     };
                     await saveToFirebase(newFile);
-                    // Set current index to the newly added file (which will be at index 0)
                     currentFileIndex = 0;
                 } else {
                     currentFileIndex = null;
@@ -1029,9 +1015,8 @@
                 contentSection.classList.add('show');
                 saveToLibrary.checked = true;
                 window.scrollTo(0, 0);
-                scrollHistory = []; // Reset scroll history
+                scrollHistory = [];
                 
-                // Show floating buttons immediately
                 floatingBackBtn.classList.add('show');
                 floatingUndoBtn.classList.add('show');
                 backToTop.classList.add('show');
@@ -1052,9 +1037,8 @@
             documentContent.innerHTML = '';
             fileInput.value = '';
             currentFileIndex = null;
-            scrollHistory = []; // Reset scroll history
+            scrollHistory = [];
             
-            // Re-sort and refresh library to show updated last read times
             savedFiles.sort((a, b) => {
                 const aLastRead = a.lastRead ? new Date(a.lastRead).getTime() : 0;
                 const bLastRead = b.lastRead ? new Date(b.lastRead).getTime() : 0;
