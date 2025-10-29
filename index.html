@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Reader</title>
+    <title>Easy Reader</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     
     <!-- Firebase SDK -->
@@ -41,7 +41,7 @@
         .upload-area {
             border: 3px dashed #667eea;
             border-radius: 15px;
-            padding: 60px 20px;
+            padding: 40px 20px;
             cursor: pointer;
             transition: all 0.3s ease;
             background: #f8f9ff;
@@ -59,8 +59,8 @@
         }
 
         .upload-icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
+            font-size: 3rem;
+            margin-bottom: 15px;
         }
 
         .upload-text {
@@ -182,11 +182,6 @@
             background: #f0f2ff;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-        }
-
-        .file-icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
         }
 
         .file-name {
@@ -890,7 +885,6 @@
 
                     fileItem.innerHTML = `
                         <button class="delete-btn" onclick="deleteFile(${index}); event.stopPropagation();">×</button>
-                        <div class="file-icon">📄</div>
                         <div class="file-name">${file.name}</div>
                         <div class="file-meta">
                             <div class="file-meta-item">📅 ${file.date}</div>
