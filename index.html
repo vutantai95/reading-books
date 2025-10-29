@@ -29,71 +29,6 @@
             margin: 0 auto;
         }
 
-        .setup-banner {
-            background: #fff3cd;
-            border: 2px solid #ffc107;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .setup-banner h3 {
-            color: #856404;
-            margin-bottom: 10px;
-        }
-
-        .setup-banner p {
-            color: #856404;
-            margin-bottom: 15px;
-            line-height: 1.6;
-        }
-
-        .setup-banner a {
-            color: #667eea;
-            font-weight: 600;
-        }
-
-        .config-section {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .config-input {
-            width: 100%;
-            padding: 10px;
-            margin: 5px 0 15px 0;
-            border: 2px solid #e0e7ff;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 0.9rem;
-        }
-
-        .config-label {
-            font-weight: 600;
-            color: #333;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        .save-config-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            width: 100%;
-        }
-
-        .save-config-btn:hover {
-            opacity: 0.9;
-        }
-
         .upload-section {
             background: white;
             border-radius: 20px;
@@ -193,6 +128,7 @@
             display: flex;
             align-items: center;
             gap: 5px;
+            margin-bottom: 10px;
         }
 
         .sync-status.synced {
@@ -443,11 +379,11 @@
 
         <div class="library-section" id="librarySection">
             <div class="library-header">
-                <div class="library-title">📚 My Library</div>
                 <div>
-                    <div class="sync-status" id="syncStatus">○ Not connected</div>
-                    <button class="clear-btn" onclick="clearLibrary()" id="clearBtn" style="display: none;">🗑️ Clear all</button>
+                    <div class="library-title">📚 My Library</div>
+                    <div class="sync-status" id="syncStatus">Connecting...</div>
                 </div>
+                <button class="clear-btn" onclick="clearLibrary()" id="clearBtn" style="display: none;">🗑️ Clear all</button>
             </div>
             <div class="file-list" id="fileList">
                 <div class="empty-library">Loading...</div>
@@ -483,7 +419,6 @@
 
         let db = null;
         let savedFiles = [];
-        let isFirebaseConfigured = false;
 
         function initializeFirebase() {
             try {
@@ -498,15 +433,12 @@
 
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
-                isFirebaseConfigured = true;
-                syncStatus.textContent = '✓ Synced';
+                syncStatus.textContent = '✓ Cloud synced';
                 syncStatus.className = 'sync-status synced';
-                setupBanner.style.display = 'none';
-                configSection.style.display = 'none';
                 loadLibrary();
             } catch (error) {
-                console.error('Firebase init error:', error);
-                syncStatus.textContent = '✗ Connection error';
+                console.error('Firebase error:', error);
+                syncStatus.textContent = '✗ Offline mode';
                 syncStatus.className = 'sync-status error';
                 loadLocalLibrary();
             }
@@ -543,6 +475,8 @@
                 renderLibrary();
             } catch (error) {
                 console.error('Load error:', error);
+                syncStatus.textContent = '✗ Load failed';
+                syncStatus.className = 'sync-status error';
                 loadLocalLibrary();
             }
         }
@@ -551,6 +485,7 @@
             if (!db) {
                 savedFiles.unshift(file);
                 saveLocalLibrary();
+                renderLibrary();
                 return;
             }
 
@@ -559,9 +494,13 @@
                     ...file,
                     timestamp: firebase.firestore.FieldValue.serverTimestamp()
                 });
+                syncStatus.textContent = '✓ Cloud synced';
+                syncStatus.className = 'sync-status synced';
                 await loadLibrary();
             } catch (error) {
                 console.error('Save error:', error);
+                syncStatus.textContent = '✗ Save failed';
+                syncStatus.className = 'sync-status error';
                 savedFiles.unshift(file);
                 saveLocalLibrary();
                 renderLibrary();
